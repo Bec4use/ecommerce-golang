@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	generate "github.com/Bec4use/ecommerce-golang/tokens"
+
 	"github.com/Bec4use/ecommerce-golang/database"
 	"github.com/Bec4use/ecommerce-golang/models"
 	"github.com/gin-gonic/gin"
@@ -42,7 +44,7 @@ func VerifyPassword(userPassword string, givenPassword string) (bool, string) {
 	return valid, msg
 }
 
-func Signup() gin.HandlerFunc {
+func SignUp() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
@@ -76,7 +78,7 @@ func Signup() gin.HandlerFunc {
 		defer cancel()
 		if err != nil {
 			log.Panic(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Something went wrong, please try again"})
 			return
 		}
 
@@ -87,11 +89,11 @@ func Signup() gin.HandlerFunc {
 		password := HashPassword(*user.Password)
 		user.Password = &password
 
-		user.Created_At = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
-		user.Updated_At = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+		user.Created_At, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+		user.Updated_At, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 		user.ID = primitive.NewObjectID()
 		user.User_ID = user.ID.Hex()
-		token, refreshtoken, _ := generate.TokenGenerator(*user.Email, *user.First_Name, *&user.Last_Name, user.User_ID)
+		token, refreshtoken, _ := generate.TokenGenerator(*user.Email, *user.First_Name, *user.Last_Name, user.User_ID)
 		user.Token = &token
 		user.Refresh_Token = &refreshtoken
 		user.UserCart = make([]models.ProductUser, 0)
@@ -113,6 +115,7 @@ func Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 		defer cancel()
+		var founduser models.User
 
 		var user models.User
 		if err := c.BindJSON(&user); err != nil {
@@ -137,7 +140,7 @@ func Login() gin.HandlerFunc {
 			fmt.Println(msg)
 			return
 		}
-		token, refreshtoken, _ := generate.TokenGenerator(*founduser.Email, *founduser.First_Name, *&founduser.Last_Name, founduser.User_ID)
+		token, refreshtoken, _ := generate.TokenGenerator(*founduser.Email, *founduser.First_Name, *founduser.Last_Name, founduser.User_ID)
 		defer cancel()
 
 		generate.UpdateAllTokens(token, refreshtoken, founduser.User_ID)
@@ -149,6 +152,21 @@ func Login() gin.HandlerFunc {
 
 func ProductViewerAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var products models.Product
+		defer cancel()
+		if err := c.BindJSON(&products); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		products.Product_ID = primitive.NewObjectID()
+		_, anyerr := ProductCollection.InsertOne(ctx, products)
+		if anyerr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "not inserted"})
+			return
+		}
+		defer cancel()
+		c.JSON(http.StatusOK, "Product added successfully")
 	}
 }
 

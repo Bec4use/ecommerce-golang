@@ -4,31 +4,36 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func DBSet() *mongo.Client {
-
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
-
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Error loading .env file")
 	}
+	username := os.Getenv("MONGO_USERNAME")
+	password := os.Getenv("MONGO_PASSWORD")
+	host := os.Getenv("MONGO_HOST")
+	port := os.Getenv("MONGO_PORT")
+	authSource := os.Getenv("MONGO_AUTH_SOURCE")
+
+	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s/?authSource=%s", username, password, host, port, authSource)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
 	defer cancel()
 
-	err = client.Connect(ctx)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionString))
 	if err != nil {
 		log.Fatal(err)
-
 	}
 
-	err = client.Ping(context.TODO(), nil)
+	err = client.Ping(ctx, nil)
 	if err != nil {
 		log.Println("Failed to connect to MongoDB :( ")
 		return nil
